@@ -76,7 +76,7 @@ class NIMSPFile(NIMSRaw):
     parse_priority = 5
 
     # TODO: Simplify init, just to parse the header
-    def __init__(self, filepath, num_virtual_coils=16):
+    def __init__(self, filepath, num_virtual_coils=16, notch_thresh=0):
         try:
             self.compressed = is_compressed(filepath)
             self._hdr = pfile.parse(filepath, self.compressed)
@@ -94,6 +94,7 @@ class NIMSPFile(NIMSRaw):
         self.imagedata = None
         self.fm_data = None
         self.num_vcoils = num_virtual_coils
+        self.notch_thresh = notch_thresh
         self.psd_name = os.path.basename(self._hdr.image.psdname.partition('\x00')[0])
         self.psd_type = nimsmrdata.infer_psd_type(self.psd_name)
         self.pfilename = 'P%05d' % self._hdr.rec.run_int
@@ -477,11 +478,10 @@ class NIMSPFile(NIMSRaw):
         #sense_recon = 1 if 'CAIPI' in self.series_desc else 0
         sense_recon = 0
         fermi_filt = 1
-        notch_thresh = 0
 
         with tempfile.TemporaryDirectory(dir=tempdir) as temp_dirpath:
             log.info('Running %d v-coil mux recon on %s in tempdir %s with %d jobs (sense=%d, fermi=%d, notch=%f).'
-                    % (self.num_vcoils, self.filepath, tempdir, num_jobs, sense_recon, fermi_filt, notch_thresh))
+                    % (self.num_vcoils, self.filepath, tempdir, num_jobs, sense_recon, fermi_filt, self.notch_thresh))
             if cal_file!='':
                 log.info('Using calibration file: %s.' % cal_file)
             if self.compressed:
@@ -506,7 +506,7 @@ class NIMSPFile(NIMSRaw):
                     # Recon each slice separately. Note the slice_num+1 to deal with matlab's 1-indexing.
                     # Use 'str' on timepoints so that an empty array will produce '[]'
                     cmd = ('%s --no-window-system -p %s --eval \'mux_epi_main("%s", "%s_%03d.mat", "%s", %d, %s, %d, 0, %s, %s, %s);\''
-                        % (octave_bin, recon_path, pfile_path, outname, slice_num, cal_file, slice_num + 1, str(timepoints), self.num_vcoils, str(sense_recon), str(fermi_filt), str(notch_thresh)))
+                        % (octave_bin, recon_path, pfile_path, outname, slice_num, cal_file, slice_num + 1, str(timepoints), self.num_vcoils, str(sense_recon), str(fermi_filt), str(self.notch_thresh)))
                     log.debug(cmd)
                     mux_recon_jobs.append(subprocess.Popen(args=shlex.split(cmd), stdout=open('/dev/null', 'w')))
                     slice_num += 1
@@ -593,7 +593,6 @@ class NIMSPFile(NIMSRaw):
 
 
 class ArgumentParser(argparse.ArgumentParser):
-
     def __init__(self):
         super(ArgumentParser, self).__init__()
         self.description = """Recons a GE PFile to produce a NIfTI file and (if appropriate) a B0 fieldmap.
@@ -606,11 +605,12 @@ class ArgumentParser(argparse.ArgumentParser):
         self.add_argument('-j', '--jobs', default=8, type=int, help='maximum number of processes to spawn')
         self.add_argument('-v', '--vcoils', default=0, type=int, help='number of virtual coils (0=all)')
         self.add_argument('-c', '--auxfile', default=None, help='path to auxillary files (e.g., mux calibration p-files)')
+        self.add_argument('-n', '--notch', default=0, type=float, help='notch filter threshold (0=no filter)')
 
 if __name__ == '__main__':
     args = ArgumentParser().parse_args()
     logging.basicConfig(level=logging.DEBUG)
-    pf = NIMSPFile(args.pfile, num_virtual_coils=args.vcoils)
+    pf = NIMSPFile(args.pfile, num_virtual_coils=args.vcoils, notch_thresh=args.notch)
 
     if not args.outbase:
         outbase = '%s_mux%d_arc%d_caipi%d_mica%d' % (pf.num_bands,1./pf.phase_encode_undersample,pf.caipi,pf.mica)
