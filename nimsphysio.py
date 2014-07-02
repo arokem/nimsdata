@@ -77,7 +77,7 @@ class NIMSPhysio(nimsdata.NIMSData):
         # standard deviation or the respiration low-frequency power meet the following criteria.
         self.min_number_of_frames = 8
         self.min_card_std = 4.
-        self.min_resp_lfp = 50.
+        self.min_resp_lfp = 40.
         # FIXME: How to infer the file format automatically?
         self.format_str = 'ge'
         self.tr = float(tr)
@@ -164,6 +164,7 @@ class NIMSPhysio(nimsdata.NIMSData):
         offset = self.card_dt * self.card_wave.size - self.scan_duration
         self.card_time = self.card_dt * np.arange(self.card_wave.size) - offset
         self.card_trig = self.card_trig * self.card_dt - offset
+        self.hr_instant = 60. / np.diff(self.card_trig)
 
     @classmethod
     def derived_metadata(cls, orig_metadata):
@@ -396,7 +397,10 @@ class NIMSPhysio(nimsdata.NIMSData):
                 keep_inds = np.logical_and(hr_instant>=hr_min, hr_instant<=hr_max)
                 hr_time = hr_time[keep_inds]
                 hr_instant = hr_instant[keep_inds]
-                hr = np.interp(slice_times, hr_time, hr_instant)
+                if len(hr_instant) > 2:
+                    hr = np.interp(slice_times, hr_time, hr_instant)
+                else:
+                    hr = np.zeros(slice_times.shape)
 
             # conv(hr, crf)
             self.heart_rate[:,sl] = hr
@@ -505,19 +509,23 @@ class NIMSPhysio(nimsdata.NIMSData):
     def regressor_names(self):
         return ('c1_c', 's1_c', 'c2_c', 's2_c', 'c1_r', 's1_r', 'c2_r', 's2_r', 'rv_rrf', 'rv_rrf_d', 'hr_crf', 'hr_crf_d', 'hr')
 
-    def is_valid(self):
+    def is_valid(self, resp_freq_cutoff=1.0):
         if self.nframes < self.min_number_of_frames:
             return False
         # Heuristics to detect invalid data
         # When not connected, the PPG output is very low amplitude noise
-        card_valid = self.card_wave.std() > self.min_card_std
+        hr_instant = 60. / np.diff(self.card_trig)
+        proportion_good_hr = np.sum(np.logical_and(hr_instant>=30, hr_instant<=200)) / float(len(hr_instant))
+        card_valid = self.card_wave.std() > self.min_card_std and proportion_good_hr>0.2
         # The respiration signal is heavily low-pass filtered, but valid data should still
         # have much more low-frequency energy
         freq = np.abs(np.fft.rfft(self.resp_wave))
-        if freq.size>300:
+        fs = 1. / (self.resp_dt*self.resp_wave.shape[0])
+        f_bin = int(round(resp_freq_cutoff/fs))
+        if f_bin<freq.size:
             # Look at the ratio of low-frequency amplitudes to high-frequency amplitudes.
             # There should be a lot more low-frequency in there for valid data.
-            resp_valid = freq[2:100].mean()/freq[-100:].mean() > self.min_resp_lfp
+            resp_valid = freq[2:f_bin].mean()/freq[-f_bin:].mean() > self.min_resp_lfp
         else:
             resp_valid = False
         return card_valid or resp_valid
