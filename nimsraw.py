@@ -206,7 +206,8 @@ class NIMSPFile(NIMSRaw):
         # You might think that the b-valuei for diffusion scans would be stored in self._hdr.image.b_value.
         # But alas, this is GE. Apparently, that var stores the b-value of the just the first image, which is
         # usually a non-dwi. So, we had to modify the PSD and stick the b-value into an rhuser CV. Sigh.
-        self.dwi_bvalue = self._hdr.rec.user22
+        # NOTE: pre-dv24, the bvalue was stored in rec.user22.
+        self.dwi_bvalue = self._hdr.rec.user1
         self.is_dwi = True if self.dwi_numdirs >= 6 else False
         # if bit 4 of rhtype(int16) is set, then fractional NEX (i.e., partial ky acquisition) was used.
         self.partial_ky = self._hdr.rec.scan_type & np.uint16(16) > 0
