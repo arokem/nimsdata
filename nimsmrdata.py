@@ -122,7 +122,7 @@ def infer_psd_type(psd_name):
         psd_type = 'hoshim'
     elif psd_name == 'basic':
         psd_type = 'basic'
-    elif 'mux' in psd_name: # multi-band EPI!
+    elif 'mux' in psd_name or 'mb_' in psd_name:
         psd_type = 'muxepi'
     elif 'epi' in psd_name:
         psd_type = 'epi'
