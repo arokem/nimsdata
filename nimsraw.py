@@ -377,8 +377,8 @@ class NIMSPFile(NIMSRaw):
             slice_locs = mat['sl_loc'].flatten().astype(int) - 1
             imagedata = np.zeros(sz, mat['d'].dtype)
             raw = np.atleast_3d(mat['d'])
-            if len(slice_locs)<imagedata.shape[2]:
-                slice_locs = range(imagedata.shape[2])
+            if len(slice_locs)<raw.shape[2]:
+                slice_locs = range(raw.shape[2])
                 log.warning('Slice_locs is too short. Assuming slice_locs=[0,1,...,nslices]')
             imagedata[:,:,slice_locs,...] = raw[::-1,...]
         elif 'MIP_res' in mat:
