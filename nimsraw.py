@@ -230,7 +230,9 @@ class NIMSPFile(NIMSRaw):
             self.slice_order = nimsmrdata.SLICE_ORDER_SEQ_INC
         elif self._hdr.series.se_sortorder == 1:
             self.slice_order = nimsmrdata.SLICE_ORDER_ALT_INC
+        # header geometry is LPS but we need RAS, so negate R and A.
         slice_norm = np.array([-self._hdr.image.norm_R, -self._hdr.image.norm_A, self._hdr.image.norm_S])
+
         # This is either the first slice tlhc (image_tlhc) or the last slice tlhc. How to decide?
         # And is it related to wheather I have to negate the slice_norm?
         # Tuned this empirically by comparing spiral and EPI data with the same Rx.
@@ -238,7 +240,7 @@ class NIMSPFile(NIMSRaw):
         # I have no idea why I need that! But the flipping only seems necessary for axials, not
         # coronals or the few obliques I've tested.
         # FIXME: haven't tested sagittals!
-        if (self._hdr.series.start_ras=='S' or self._hdr.series.start_ras=='I') and self._hdr.series.start_loc > self._hdr.series.end_loc:
+        if (self._hdr.series.start_ras in 'SI' and self._hdr.series.start_loc > self._hdr.series.end_loc):
             self.reverse_slice_order = True
             slice_fov = np.abs(self._hdr.series.start_loc - self._hdr.series.end_loc)
             image_position = image_tlhc - slice_norm * slice_fov
@@ -246,6 +248,11 @@ class NIMSPFile(NIMSRaw):
         else:
             image_position = image_tlhc
             self.reverse_slice_order = False
+
+        # Not sure why the following is needed.
+        if (self._hdr.series.start_ras in 'APRL' and self._hdr.series.start_loc > self._hdr.series.end_loc):
+            slice_norm = -slice_norm
+
         if self.num_bands > 1:
             image_position = image_position - slice_norm * self.band_spacing_mm * (self.num_bands - 1.0) / 2.0
 
