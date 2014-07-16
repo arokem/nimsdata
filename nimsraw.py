@@ -250,8 +250,13 @@ class NIMSPFile(NIMSRaw):
             self.reverse_slice_order = False
 
         # Not sure why the following is needed.
-        if (self._hdr.series.start_ras in 'APRL' and self._hdr.series.start_loc > self._hdr.series.end_loc):
+        # TODO: * test non-slice-reversed coronals-- do they also need l/r flip?
+        #       * test sagitals-- do they need any flipping?
+        if (self._hdr.series.start_ras in 'AP' and self._hdr.series.start_loc > self._hdr.series.end_loc):
             slice_norm = -slice_norm
+            self.flip_lr = True
+        else:
+            self.flip_lr = False
 
         if self.num_bands > 1:
             image_position = image_position - slice_norm * self.band_spacing_mm * (self.num_bands - 1.0) / 2.0
@@ -346,6 +351,10 @@ class NIMSPFile(NIMSRaw):
                 self.imagedata = self.imagedata[:,:,::-1,]
                 if self.fm_data is not None:
                     self.fm_data = self.fm_data[:,:,::-1,]
+            if self.flip_lr:
+                self.imagedata = self.imagedata[::-1,:,:,]
+                if self.fm_data is not None:
+                    self.fm_data = self.fm_data[::-1,:,:,]
             if self.psd_type=='spiral' and self.num_echos == 2:
                 # Uncomment to save spiral in/out
                 #nimsnifti.NIMSNifti.write(self, self.imagedata[:,:,:,:,0], outbase + '_in')
