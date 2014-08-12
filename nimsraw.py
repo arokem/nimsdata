@@ -151,7 +151,6 @@ class NIMSPFile(NIMSRaw):
         # psd-specific params get set here
         if self.psd_type == 'spiral':
             self.num_timepoints = int(self._hdr.rec.user0)    # not in self._hdr.rec.nframes for sprt
-            self.num_timepoints_available = self.num_timepoints
             self.deltaTE = self._hdr.rec.user15
             self.band_spacing = 0
             self.scale_data = True
@@ -168,14 +167,16 @@ class NIMSPFile(NIMSRaw):
             # first 6 are ref scans, so ignore those. Also, two acquired timepoints are used
             # to generate each reconned time point.
             self.num_timepoints = (self._hdr.rec.npasses * self._hdr.rec.nechoes - 6) / 2
-            self.num_timepoints_available = self.num_timepoints
             self.num_echos = 1
         elif self.psd_type == 'muxepi':
             self.num_bands = int(self._hdr.rec.user6)
             self.num_mux_cal_cycle = int(self._hdr.rec.user7)
             self.band_spacing_mm = self._hdr.rec.user8
-            self.num_timepoints = self._hdr.rec.npasses + self.num_bands * self._hdr.rec.ileaves * (self.num_mux_cal_cycle-1)
-            self.num_timepoints_available = self._hdr.rec.npasses - self.num_bands * self._hdr.rec.ileaves * (self.num_mux_cal_cycle-1) + self.num_mux_cal_cycle
+            # When ARC is used with mux, the number of acquired TRs is greater than what's Rxed.
+            # ARC calibration uses multi-shot, so the additional TRs = num_bands*(ileaves-1)*num_mux_cal_cycle
+            self.num_timepoints = self._hdr.rec.npasses + self.num_bands * (self._hdr.rec.ileaves-1) * self.num_mux_cal_cycle
+            # The actual number of images returned by the mux recon is npasses - num_calibration_passes + num_mux_cal_cycle
+            self.num_timepoints_available = self._hdr.rec.npasses - self.num_bands * self.num_mux_cal_cycle + self.num_mux_cal_cycle
             # TODO: adjust the image.tlhc... fields to match the correct geometry.
         elif self.psd_type == 'mrs':
             self._hdr.image.scanspacing = 0.
@@ -201,9 +202,10 @@ class NIMSPFile(NIMSRaw):
         # TODO: Set this correctly! (it's in the dicom at (0x0043, 0x1083))
         self.slice_encode_undersample = 1.
         self.acquisition_matrix = [self._hdr.rec.rc_xres, self._hdr.rec.rc_yres]
+        # TODO: it looks like the pfile now has a 'grad_data' field!
         # Diffusion params
         self.dwi_numdirs = self._hdr.rec.numdifdirs
-        # You might think that the b-valuei for diffusion scans would be stored in self._hdr.image.b_value.
+        # You might think that the b-value for diffusion scans would be stored in self._hdr.image.b_value.
         # But alas, this is GE. Apparently, that var stores the b-value of the just the first image, which is
         # usually a non-dwi. So, we had to modify the PSD and stick the b-value into an rhuser CV. Sigh.
         # NOTE: pre-dv24, the bvalue was stored in rec.user22.
@@ -211,6 +213,8 @@ class NIMSPFile(NIMSRaw):
         self.is_dwi = True if self.dwi_numdirs >= 6 else False
         # if bit 4 of rhtype(int16) is set, then fractional NEX (i.e., partial ky acquisition) was used.
         self.partial_ky = self._hdr.rec.scan_type & np.uint16(16) > 0
+        # was pepolar used to flip the phase encode direction?
+        self.phase_encode_dir = -1 if np.bitwise_and(self._hdr.rec.dacq_ctrl,4)==4 else 1
         self.caipi = self._hdr.rec.user13   # true: CAIPIRINHA-type acquisition; false: Direct aliasing of simultaneous slices.
         self.cap_blip_start = self._hdr.rec.user14   # Starting index of the kz blips. 0~(mux-1) correspond to -kmax~kmax.
         self.cap_blip_inc = self._hdr.rec.user15   # Increment of the kz blip index for adjacent acquired ky lines.
@@ -271,7 +275,9 @@ class NIMSPFile(NIMSRaw):
         row_cosines[0:2] = -row_cosines[0:2]
         col_cosines[0:2] = -col_cosines[0:2]
         if self.is_dwi and self.dwi_bvalue==0:
-            log.warning('the data appear to be diffusion-weighted, but image.b_value is 0!')
+            log.warning('the data appear to be diffusion-weighted, but image.b_value is 0! Setting it to 10.')
+            # Set it to something other than 0 so non-dwi's can be distinguished from dwi's
+            self.dwi_bvalue = 10.
         # The bvals/bvecs will get set later
         self.bvecs,self.bvals = (None,None)
         self.image_rotation = nimsmrdata.compute_rotation(row_cosines, col_cosines, slice_norm)
@@ -301,7 +307,7 @@ class NIMSPFile(NIMSRaw):
             self.bvecs = None
             self.bvals = None
         else:
-            num_nondwi = self.num_timepoints_available - self.dwi_numdirs # FIXME: assumes that all the non-dwi images are acquired first.
+            num_nondwi = self.num_timepoints_available - self.dwi_numdirs
             bvals = np.concatenate((np.zeros(num_nondwi, dtype=float), np.tile(self.dwi_bvalue, self.dwi_numdirs)))
             bvecs = np.hstack((np.zeros((3,num_nondwi), dtype=float), bvecs.reshape(self.dwi_numdirs, 3).T))
             self.bvecs,self.bvals = nimsmrdata.adjust_bvecs(bvecs, bvals, self.scanner_type, self.image_rotation)
@@ -494,9 +500,11 @@ class NIMSPFile(NIMSRaw):
                 vrgf_file = cal_vrgf_file
             else:
                 raise NIMSPFileError('vrgf.dat file not found')
-        # HACK to force SENSE recon for caipi data
-        #sense_recon = 1 if 'CAIPI' in self.series_desc else 0
-        sense_recon = 0
+        # Scans with mux>1, arc>1, caipi
+        if self.is_dwi:
+            sense_recon = 1
+        else:
+            sense_recon = 0
         fermi_filt = 1
 
         with tempfile.TemporaryDirectory(dir=tempdir) as temp_dirpath:
