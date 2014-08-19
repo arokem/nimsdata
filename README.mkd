@@ -1,0 +1,21 @@
+Data handling utilities for the CNI's NIMS database
+===================================================
+
+Note that many of these utilites also have command-line interfaces, so you don't need a full NIMS instance to use them. E.g., you can run our image reconstruction pipeline using nimsraw.py (See the help for nimsraw by running it with the -h flag.)
+
+### Dependencies
+
+If you haven't already, create a virtualenv:
+
+    sudo apt-get install python-virtualenv
+    cd /var/local/
+    virtualenv tg2env
+    source /var/local/tg2env/activate
+
+
+Install Dependencies
+
+    sudo apt-get install libfftw3-3 libftw3-dev gfortan libatlas-base-dev octave
+    source /var/local/tg2env/activate
+    pip install scipy
+
