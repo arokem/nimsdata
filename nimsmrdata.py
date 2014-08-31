@@ -93,7 +93,12 @@ def scale_bvals(bvecs, bvals):
     # sqmag due to rounding error. To avoid spurious adjustments to the bvals, we round the sqmag based
     # on the number of decimal values.
     # TODO: is there a more elegant way to determine the number of decimals used?
-    num_decimals = np.nonzero([np.max(np.abs(bvecs-bvecs.round(decimals=d))) for d in range(9)])[0][-1] + 1
+    try:
+        num_decimals = np.nonzero([np.max(np.abs(bvecs-bvecs.round(decimals=d))) for d in range(9)])[0][-1] + 1
+    except IndexError:
+        # the bvecs don't have ANY decimals, and thus a rounding threshold cannot be set
+        log.warning('there are no decimals, cannot intelligently scale bvecs/bvals')
+        num_decimals = 1
     sqmag = np.around(sqmag, decimals=num_decimals-1)
     bvals *= sqmag           # Scale each bval by the squared magnitude of the corresponding bvec
     sqmag[sqmag==0] = np.inf # Avoid divide-by-zero
