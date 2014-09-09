@@ -76,7 +76,7 @@ class NIMSPFile(NIMSRaw):
     parse_priority = 5
 
     # TODO: Simplify init, just to parse the header
-    def __init__(self, filepath, num_virtual_coils=16, notch_thresh=0):
+    def __init__(self, filepath, num_virtual_coils=16, notch_thresh=0, recon_type=None):
         try:
             self.compressed = is_compressed(filepath)
             self._hdr = pfile.parse(filepath, self.compressed)
@@ -95,6 +95,7 @@ class NIMSPFile(NIMSRaw):
         self.fm_data = None
         self.num_vcoils = num_virtual_coils
         self.notch_thresh = notch_thresh
+        self.recon_type = recon_type
         self.psd_name = os.path.basename(self._hdr.image.psdname.partition('\x00')[0])
         self.psd_type = nimsmrdata.infer_psd_type(self.psd_name)
         self.pfilename = 'P%05d' % self._hdr.rec.run_int
@@ -297,11 +298,13 @@ class NIMSPFile(NIMSRaw):
             self.bvals = None
             return
         with open(tensor_file) as fp:
-            uid = fp.readline().rstrip()
-            ndirs = int('0'+fp.readline().rstrip())
+            try:
+                uid = fp.readline().rstrip()
+                ndirs = int('0'+fp.readline().rstrip())
+            except:
+                fp.seek(0, 0)
+                ndirs = int('0'+fp.readline().rstrip())
             bvecs = np.fromfile(fp, sep=' ')
-        if uid != self._hdr.series.series_uid:
-            raise NIMSPFileError('tensor file UID does not match PFile UID!')
         if ndirs != self.dwi_numdirs or self.dwi_numdirs != bvecs.size / 3.:
             log.warning('tensor file numdirs does not match PFile header numdirs!')
             self.bvecs = None
@@ -500,11 +503,18 @@ class NIMSPFile(NIMSRaw):
                 vrgf_file = cal_vrgf_file
             else:
                 raise NIMSPFileError('vrgf.dat file not found')
-        # Scans with mux>1, arc>1, caipi
-        if self.is_dwi:
+        if self.recon_type==None:
+            # set the recon type automatically
+            # Scans with mux>1, arc>1, caipi
+            if self.is_dwi and self.num_bands>1 and self.phase_encode_undersample<1. and self.caipi:
+                sense_recon = 1
+            else:
+                sense_recon = 0
+        elif self.recon_type=='sense':
             sense_recon = 1
         else:
             sense_recon = 0
+
         fermi_filt = 1
 
         with tempfile.TemporaryDirectory(dir=tempdir) as temp_dirpath:
@@ -634,11 +644,12 @@ class ArgumentParser(argparse.ArgumentParser):
         self.add_argument('-v', '--vcoils', default=0, type=int, help='number of virtual coils (0=all)')
         self.add_argument('-c', '--auxfile', default=None, help='path to auxillary files (e.g., mux calibration p-files)')
         self.add_argument('-n', '--notch', default=0, type=float, help='notch filter threshold (0=no filter)')
+        self.add_argument('-r', '--recon', default=None, help='recon type ("sense", "grappa", leave unset to automatically determine recon')
 
 if __name__ == '__main__':
     args = ArgumentParser().parse_args()
     logging.basicConfig(level=logging.DEBUG)
-    pf = NIMSPFile(args.pfile, num_virtual_coils=args.vcoils, notch_thresh=args.notch)
+    pf = NIMSPFile(args.pfile, num_virtual_coils=args.vcoils, notch_thresh=args.notch, recon_type=args.recon)
 
     if not args.outbase:
         outbase = '%s_mux%d_arc%d_caipi%d_mica%d' % (pf.num_bands,1./pf.phase_encode_undersample,pf.caipi,pf.mica)
