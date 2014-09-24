@@ -157,14 +157,15 @@ class NIMSPhysio(nimsdata.NIMSData):
         if archive:
             archive.close()
 
-        # move time zero to correspond to the start of the fMRI data
-        offset = self.resp_dt * self.resp_wave.size - self.scan_duration
-        self.resp_time = self.resp_dt * np.arange(self.resp_wave.size) - offset
+        if self.resp_wave!=None and self.card_wave!=None:
+            # move time zero to correspond to the start of the fMRI data
+            offset = self.resp_dt * self.resp_wave.size - self.scan_duration
+            self.resp_time = self.resp_dt * np.arange(self.resp_wave.size) - offset
 
-        offset = self.card_dt * self.card_wave.size - self.scan_duration
-        self.card_time = self.card_dt * np.arange(self.card_wave.size) - offset
-        self.card_trig = self.card_trig * self.card_dt - offset
-        self.hr_instant = 60. / np.diff(self.card_trig)
+            offset = self.card_dt * self.card_wave.size - self.scan_duration
+            self.card_time = self.card_dt * np.arange(self.card_wave.size) - offset
+            self.card_trig = self.card_trig * self.card_dt - offset
+            self.hr_instant = 60. / np.diff(self.card_trig)
 
     @classmethod
     def derived_metadata(cls, orig_metadata):
@@ -510,7 +511,7 @@ class NIMSPhysio(nimsdata.NIMSData):
         return ('c1_c', 's1_c', 'c2_c', 's2_c', 'c1_r', 's1_r', 'c2_r', 's2_r', 'rv_rrf', 'rv_rrf_d', 'hr_crf', 'hr_crf_d', 'hr')
 
     def is_valid(self, resp_freq_cutoff=1.0):
-        if self.nframes < self.min_number_of_frames:
+        if self.nframes < self.min_number_of_frames or self.resp_wave==None or self.card_wave==None:
             return False
         # Heuristics to detect invalid data
         # When not connected, the PPG output is very low amplitude noise
