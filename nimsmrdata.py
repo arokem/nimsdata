@@ -336,6 +336,11 @@ class NIMSMRData(nimsdata.NIMSData):
                 'title': 'Effective Echo Spacing',
                 'type': 'number',
             },
+            'phase_encode_direction': {
+                'attribute': 'phase_encode_direction',
+                'title': 'Phase-encode Direction',
+                'type': 'integer',
+            },
             'duration': {
                 'attribute': 'duration',
                 'title': 'Duration',

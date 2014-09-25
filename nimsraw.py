@@ -215,7 +215,7 @@ class NIMSPFile(NIMSRaw):
         # if bit 4 of rhtype(int16) is set, then fractional NEX (i.e., partial ky acquisition) was used.
         self.partial_ky = self._hdr.rec.scan_type & np.uint16(16) > 0
         # was pepolar used to flip the phase encode direction?
-        self.phase_encode_dir = -1 if np.bitwise_and(self._hdr.rec.dacq_ctrl,4)==4 else 1
+        self.phase_encode_direction = 1 if np.bitwise_and(self._hdr.rec.dacq_ctrl,4)==4 else 0
         self.caipi = self._hdr.rec.user13   # true: CAIPIRINHA-type acquisition; false: Direct aliasing of simultaneous slices.
         self.cap_blip_start = self._hdr.rec.user14   # Starting index of the kz blips. 0~(mux-1) correspond to -kmax~kmax.
         self.cap_blip_inc = self._hdr.rec.user15   # Increment of the kz blip index for adjacent acquired ky lines.

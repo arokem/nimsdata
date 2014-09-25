@@ -152,6 +152,7 @@ class NIMSDicom(nimsmrdata.NIMSMRData):
         self.qto_xyz = None
         self.image_type = getelem(self._hdr, 'ImageType', None, [])
         self.effective_echo_spacing = getelem(self._hdr, TAG_EPI_EFFECTIVE_ECHO_SPACING, float, 0.) / 1e6
+        self.phase_encode_direction = None; # FINDME: 'pepolar'-- stored in bit 4 of rec.dacq_ctrl in pfiles. Probably in a private tag in DICOM.
         self.is_dwi = bool(self.image_type == TYPE_ORIGINAL and getelem(self._hdr, TAG_DIFFUSION_DIRS, int, 0) >= 6)
         self.bvals = None
         self.bvecs = None
