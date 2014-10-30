@@ -496,16 +496,13 @@ class NIMSPFile(NIMSRaw):
         # The dat files might be missing or empty if the vendor recon was disabled. If so, try to use the cal dat file.
         # FIXME: if the p-file is not compressed, the cal dat file will not be used! We should refactor the recon
         # code so that the dat files are always explicitly specified.
-        if not os.path.isfile(ref_file) or os.path.getsize(ref_file)<64:
-            if cal_ref_file:
+        if not os.path.isfile(ref_file) or os.path.getsize(ref_file)<64 or not os.path.isfile(vrgf_file) or os.path.getsize(vrgf_file)<64:
+            if cal_ref_file and cal_vrgf_file:
                 ref_file = cal_ref_file
-            else:
-                raise NIMSPFileError('ref.dat file not found')
-        if not os.path.isfile(vrgf_file) or os.path.getsize(vrgf_file)<64:
-            if cal_vrgf_file:
                 vrgf_file = cal_vrgf_file
+                log.info('ref/vrgf.dat not found-- using calibration ref/vrgf.')
             else:
-                raise NIMSPFileError('vrgf.dat file not found')
+                raise NIMSPFileError('ref.dat/vrgf.dat not found')
         if self.recon_type==None:
             # set the recon type automatically
             # Scans with mux>1, arc>1, caipi
@@ -533,7 +530,7 @@ class NIMSPFile(NIMSRaw):
                 pfile_path = self.filepath
             if cal_file and cal_compressed:
                 shutil.copy(cal_ref_file, os.path.join(temp_dirpath, os.path.basename(cal_ref_file)))
-                shutil.copy(vrgf_file, os.path.join(temp_dirpath, os.path.basename(cal_vrgf_file)))
+                shutil.copy(cal_vrgf_file, os.path.join(temp_dirpath, os.path.basename(cal_vrgf_file)))
                 cal_file = uncompress(cal_file, temp_dirpath)
             recon_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'mux_epi_recon'))
             outname = os.path.join(temp_dirpath, 'sl')
