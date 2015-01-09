@@ -489,14 +489,19 @@ class NIMSPFile(medimg.MedImgReader):
                 # TODO: adjust the image.tlhc... fields to match the correct geometry.
             elif self.psd_type == 'mrs':
                 self._hdr.image.scanspacing = 0.
-                self.mm_per_vox = [self._hdr.rec.roileny, self._hdr.rec.roilenx, self._hdr.rec.roilenz]
-                image_tlhc = np.array((-self._hdr.rec.roilocx - self.mm_per_vox[0]/2.,
-                                        self._hdr.rec.roilocy + self.mm_per_vox[1]/2.,
-                                        self._hdr.rec.roilocz - self.mm_per_vox[1]/2.))
+                self.mm_per_vox = [self._hdr.rec.roileny,
+                                   self._hdr.rec.roilenx,
+                                   self._hdr.rec.roilenz]
+                image_tlhc = np.array((
+                    -self._hdr.rec.roilocx - self.mm_per_vox[0]/2.,
+                    self._hdr.rec.roilocy + self.mm_per_vox[1]/2.,
+                    self._hdr.rec.roilocz - self.mm_per_vox[1]/2.))
                 image_trhc = image_tlhc - [self.mm_per_vox[0], 0., 0.]
                 image_brhc = image_trhc + [0., self.mm_per_vox[1], 0.]
-            # Tread carefully! Most of the stuff down here depends on various fields being corrected in the
-            # sequence-specific set of hacks just above. So, move things with care!
+
+            # Tread carefully! Most of the stuff down here depends on various
+            # fields being corrected in the sequence-specific set of hacks just
+            # above. So, move things with care!
 
             # Note: the following is true for single-shot planar acquisitions (EPI and 1-shot spiral).
             # For multishot sequences, we need to multiply by the # of shots. And for non-planar aquisitions,
